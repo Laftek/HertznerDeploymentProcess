@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Generated files and logs
+logs/
+certbot/
+/opt/backups/
+
+# IDE files
+.idea/
+.vscode/
+*.suo
+*.user
+bin/
+obj/

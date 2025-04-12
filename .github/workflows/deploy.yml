@@ -1,0 +1,37 @@
+# Purpose: GitHub Actions workflow that automates deployments to your server
+# when changes are pushed to the main branch, using SSH for secure connection
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+      
+      - name: Deploy to server
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} '
+            cd /opt/myapp && 
+            git pull && 
+            docker-compose down && 
+            docker-compose up -d --build
+          '
+      
+      - name: Verify deployment
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} '
+            echo "Checking logs to verify deployment..." &&
+            sleep 10 &&
+            docker-compose logs --tail=50 app
+          '

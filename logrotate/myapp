@@ -1,0 +1,11 @@
+# Purpose: Configures automatic rotation of application log files
+# to prevent disk space issues
+/opt/myapp/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 youruser youruser
+}
