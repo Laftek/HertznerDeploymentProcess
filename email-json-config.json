@@ -1,0 +1,8 @@
+{
+  "SmtpHost": "smtp.gmail.com",
+  "SmtpPort": 587,
+  "EmailUsername": "pricetrek.test@gmail.com",
+  "EmailPassword": "",
+  "EmailFrom": "pricetrek.test@gmail.com",
+  "EmailTo": "mathew.marant@gmail.com"
+}

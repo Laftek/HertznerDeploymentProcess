@@ -1,0 +1,18 @@
+# .github/workflows/notify-template.yml in your C# app repository
+name: Notify Template Repository
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Template Repo
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: Laftek/HertznerDeploymentProcess
+          event-type: app-updated
+          client-payload: '{"repository": "${{ github.repository }}", "ref": "${{ github.ref }}"}'

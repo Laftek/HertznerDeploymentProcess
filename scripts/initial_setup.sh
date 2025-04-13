@@ -122,6 +122,24 @@ else
     echo "NOTE: .env file already exists. Keeping existing file."
 fi
 
+# Setup email configuration if not exists
+if [ ! -f /opt/myapp/config/email.json ]; then
+    echo "Creating email configuration..."
+    cat > /opt/myapp/config/email.json << EOF
+{
+  "SmtpHost": "smtp.gmail.com",
+  "SmtpPort": 587,
+  "EmailUsername": "your_email@gmail.com",
+  "EmailPassword": "your_app_password",
+  "EmailFrom": "your_email@gmail.com",
+  "EmailTo": "recipient@email.com"
+}
+EOF
+    chmod 600 /opt/myapp/config/email.json
+    echo "Created email configuration file"
+else
+    echo "NOTE: Email configuration already exists. Keeping existing file."
+fi
 # Configure log rotation for application logs
 if [ ! -f /etc/logrotate.d/myapp ]; then
     echo "Configuring log rotation..."

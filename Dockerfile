@@ -16,6 +16,16 @@ FROM mcr.microsoft.com/dotnet/runtime:7.0
 WORKDIR /app
 COPY --from=build /app .
 
+# Install Python for email alerts
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir requests
+
+# Create config directory
+RUN mkdir -p /app/config
+
 # Add tty support for Gotty
 ENV TERM xterm
 

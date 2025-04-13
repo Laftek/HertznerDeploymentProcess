@@ -1,17 +1,67 @@
-# Purpose: GitHub Actions workflow that automates deployments to your server
-# when changes are pushed to the main branch, using SSH for secure connection
-name: Deploy to Hetzner
+# .github/workflows/deploy.yml in your template repository
+name: Deploy C# Application
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      app_repo:
+        description: 'C# App Repository (username/repo)'
+        required: true
+        default: 'yourusername/csharp-project'
+      app_branch:
+        description: 'C# App Branch'
+        required: true
+        default: 'main'
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  repository_dispatch:
+    types: [app-updated]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout template repository
+        uses: actions/checkout@v3
+        with:
+          path: template
+      
+      - name: Checkout C# repository
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ github.event.inputs.app_repo || github.event.client_payload.repository || 'yourusername/csharp-project' }}
+          ref: ${{ github.event.inputs.app_branch || github.event.client_payload.ref || 'main' }}
+          path: csharp-app
+          token: ${{ secrets.PAT_TOKEN }}
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '7.0.x'
+      
+      - name: Build and publish C# app
+        run: |
+          cd csharp-app
+          dotnet publish -c Release -o ../template/src
+      
+      - name: Extract app details
+        run: |
+          # Find the DLL file and extract app name
+          cd template/src
+DLL_NAME=$(find . -type f -name "*.dll" | grep -v "Microsoft" | grep -v "System" | head -1 | xargs -n1 basename)
+APP_NAME="${DLL_NAME%.dll}"
+echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+
+          
+          # Create deployment configuration
+          cd ..
+          cat > deployment.conf << EOF
+          APP_NAME="$APP_NAME"
+          DOMAIN="${APP_NAME}.yourdomain.com"
+          DB_NAME="${APP_NAME}_db"
+          DB_USER="${APP_NAME}_user"
+          EOF
       
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
@@ -19,19 +69,58 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.KNOWN_HOSTS }}
       
+      - name: Ensure config directory exists
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} 'mkdir -p /opt/myapp/config'
+      
       - name: Deploy to server
         run: |
+          # Deploy template files first
+          rsync -avz --delete --exclude='.env' --exclude='config/email.json' template/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/opt/myapp/
+          
+          # Create .env file on server
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "cat > /opt/myapp/.env << EOF
+          DB_PASSWORD='${{ secrets.DB_PASSWORD }}'
+          BINANCE_API_KEY='${{ secrets.BINANCE_API_KEY }}'
+          BINANCE_API_SECRET='${{ secrets.BINANCE_API_SECRET }}'
+          GOTTY_USER='admin'
+          GOTTY_PASSWORD='${{ secrets.GOTTY_PASSWORD }}'
+          EOF
+          chmod 600 /opt/myapp/.env"
+          
+          # Create email.json if it doesn't exist
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
+            if [ ! -f /opt/myapp/config/email.json ]; then
+              cat > /opt/myapp/config/email.json << EOF
+              {
+                \"SmtpHost\": \"smtp.gmail.com\",
+                \"SmtpPort\": 587,
+                \"EmailUsername\": \"${{ secrets.EMAIL_USERNAME }}\",
+                \"EmailPassword\": \"${{ secrets.EMAIL_PASSWORD }}\",
+                \"EmailFrom\": \"${{ secrets.EMAIL_FROM }}\",
+                \"EmailTo\": \"${{ secrets.EMAIL_TO }}\"
+              }
+              EOF
+              chmod 600 /opt/myapp/config/email.json
+            fi
+          "
+          
+          # Execute deployment scripts on server
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} '
             cd /opt/myapp && 
-            git pull && 
-            docker-compose down && 
+            chmod +x scripts/*.sh &&
+            ./scripts/setup_security.sh &&
+            ./scripts/setup_cron.sh &&
+            docker-compose down &&
             docker-compose up -d --build
           '
       
       - name: Verify deployment
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} '
-            echo "Checking logs to verify deployment..." &&
-            sleep 10 &&
-            docker-compose logs --tail=50 app
+            echo "Checking container status..." &&
+            cd /opt/myapp &&
+            docker-compose ps &&
+            echo "Checking application logs..." &&
+            docker-compose logs --tail=20 app
           '
